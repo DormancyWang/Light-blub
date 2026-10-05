@@ -1,10 +1,12 @@
 # light-bulb - 临时阅读标记
 
-一个用于临时阅读的 Chrome 扩展，可随手标记网页重点并记下你的想法。
+一个用于阅读的 Chrome 扩展，可随手标记网页重点并记下你的想法。
 
 
 Vibe with Copilot
 
+# What it looks like
+![alt text](Snipaste_2026-10-06_03-01-07.png)
 
 ## Load in Chrome
 
