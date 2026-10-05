@@ -6,8 +6,7 @@
 Vibe with Copilot
 
 # What it looks like
-![alt text](Snipaste_2026-10-06_03-01-07.png)
-
+![alt text](Snipaste_2026-10-06_03-06-25-1.png)
 ## Load in Chrome
 
 1. Open `chrome://extensions`.
