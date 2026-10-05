@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>light-bulb - 临时阅读标记</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #202a34;
+      background: #f5f7f6;
+    }
+    * { box-sizing: border-box; }
+    body { display: flex; width: 420px; height: 600px; flex-direction: column; margin: 0; overflow: hidden; }
+    header {
+      flex: none; padding: 15px 18px 13px; border-bottom: 1px solid #dce3df;
+      background: #fff;
+    }
+    .eyebrow { margin: 0 0 4px; color: #40725e; font-size: 10px; font-weight: 700; }
+    h1 { margin: 0; font-size: 20px; line-height: 1.2; font-weight: 650; }
+    .count { margin: 6px 0 0; color: #63706a; font-size: 12px; }
+    .search-box {
+      display: flex; height: 35px; align-items: center; gap: 9px; margin-top: 11px;
+      padding: 0 10px; border: 1px solid #d5ded9; border-radius: 6px; background: #fbfcfb;
+    }
+    .search-box:focus-within { border-color: #57836d; }
+    .search-icon { position: relative; width: 14px; height: 14px; flex: none; }
+    .search-icon::before {
+      position: absolute; top: 1px; left: 1px; width: 8px; height: 8px;
+      border: 1.5px solid #718078; border-radius: 50%; content: "";
+    }
+    .search-icon::after {
+      position: absolute; top: 9px; left: 10px; width: 5px;
+      border-top: 1.5px solid #718078; transform: rotate(45deg); content: "";
+    }
+    .search-box input { width: 100%; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 12px; }
+    .search-box input::placeholder { color: #87938c; }
+    main { flex: 1; min-height: 0; padding: 10px 12px; overflow: auto; }
+    .tree { margin: 0; padding: 0 0 0 2px; list-style: none; }
+    .tree-node { margin: 0 0 5px; }
+    .group { border: 1px solid #dce3df; border-radius: 7px; background: #fff; }
+    .group summary {
+      position: relative;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px;
+      padding: 10px 11px 10px 27px; cursor: pointer; list-style: none;
+    }
+    .group summary::-webkit-details-marker { display: none; }
+    .group summary::before {
+      position: absolute; top: 15px; left: 12px; width: 6px; height: 6px;
+      border-right: 1.5px solid #718078; border-bottom: 1.5px solid #718078;
+      transform: rotate(-45deg); content: "";
+    }
+    .group[open] summary::before { top: 13px; transform: rotate(45deg); }
+    .domain { overflow: hidden; color: #202a34; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .page-path { grid-column: 1; overflow: hidden; color: #69756f; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .group-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #40725e; font-size: 11px; }
+    .items { margin: 0 0 8px 18px; padding: 0 10px 0 12px; border-left: 1px solid #cbd6d0; list-style: none; }
+    .item { position: relative; padding: 8px 28px 8px 10px; }
+    .item::before { position: absolute; top: 9px; bottom: 9px; left: 0; width: 3px; border-radius: 3px; background: var(--marker-color); content: ""; }
+    .item::after { position: absolute; top: 16px; left: -12px; width: 9px; border-top: 1px solid #cbd6d0; content: ""; }
+    .item[data-style="hatch"]::before { background: repeating-linear-gradient(135deg, var(--marker-color) 0 3px, #53615a 3px 4px); }
+    .excerpt { margin: 0; font-size: 12px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+    .note { margin: 4px 0 0; color: #56635d; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .note-editor {
+      display: none; width: 100%; min-height: 64px; margin-top: 5px; padding: 7px;
+      resize: vertical; border: 1px solid #d5ded9; border-radius: 5px;
+      color: inherit; font: inherit; font-size: 12px;
+    }
+    .note-actions { display: none; gap: 6px; margin-top: 6px; }
+    .note-actions button {
+      padding: 4px 8px; border: 1px solid #d5ded9; border-radius: 5px;
+      background: #fff; color: inherit; cursor: pointer; font: inherit; font-size: 11px;
+    }
+    .note-actions .save-note { border-color: #263746; background: #263746; color: #fff; }
+    .edit-note { margin-top: 5px; padding: 0; border: 0; background: transparent; color: #40725e; cursor: pointer; font: inherit; font-size: 11px; }
+    .item.editing .note { display: none; }
+    .item.editing .note-editor { display: block; }
+    .item.editing .note-actions { display: flex; }
+    .item.editing .edit-note { display: none; }
+    .style-label { display: inline-block; margin-top: 5px; color: #748078; font-size: 10px; }
+    .delete {
+      position: absolute; top: 7px; right: 0; width: 26px; height: 26px;
+      border: 0; border-radius: 5px; background: transparent; color: #8a514a; cursor: pointer;
+      font-size: 17px; line-height: 1;
+    }
+    .delete:hover { background: #f8eeec; color: #9f3028; }
+    .empty { padding: 36px 20px; color: #68746e; text-align: center; font-size: 13px; line-height: 1.5; }
+    footer { flex: none; padding: 8px 16px 10px; border-top: 1px solid #dce3df; background: #fff; color: #748078; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="eyebrow">QUICK READING MARKS</p>
+    <h1>light-bulb</h1>
+    <p class="count" id="count">正在载入…</p>
+    <label class="search-box" aria-label="搜索标记">
+      <span class="search-icon" aria-hidden="true"></span>
+      <input id="search" type="search" placeholder="搜索片段内容或 URL" autocomplete="off">
+    </label>
+  </header>
+  <main id="groups" aria-live="polite"></main>
+  <footer>标记与笔记仅保存在此浏览器中</footer>
+  <script src="dashboard.js"></script>
+</body>
+</html>

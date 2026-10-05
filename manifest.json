@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Light-bulb - 在网页随手记下你的想法",
+  "version": "1.0.0",
+  "description": "随手标记网页重点，临时记录阅读笔记。",
+  "permissions": ["storage"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "Light-bulb",
+    "default_popup": "dashboard.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
