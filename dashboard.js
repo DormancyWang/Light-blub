@@ -100,11 +100,6 @@ function createItem(annotation, storageKey) {
   noteActions.append(saveButton, cancelButton);
   item.append(noteActions);
 
-  const styleLabel = document.createElement("span");
-  styleLabel.className = "style-label";
-  styleLabel.textContent = annotation.style === "hatch" ? "斜线填充" : "纯色高亮";
-  item.append(styleLabel);
-
   const deleteButton = document.createElement("button");
   deleteButton.className = "delete";
   deleteButton.type = "button";

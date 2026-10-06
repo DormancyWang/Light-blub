@@ -11,9 +11,18 @@
   let annotations = [];
   let activeRange = null;
   let activeColor = "yellow";
-  let activeStyle = "solid";
   let popoverTargetId = null;
   let hidePopoverTimer = 0;
+
+  async function withStorage(operation) {
+    try {
+      if (typeof chrome === "undefined" || !chrome.runtime?.id) return null;
+      return await operation();
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("Extension context invalidated")) return null;
+      throw error;
+    }
+  }
 
   const host = document.createElement("div");
   host.id = hostId;
@@ -22,28 +31,27 @@
     <style>
       :host { all: initial; }
       .toolbar {
-        position: fixed; z-index: 2147483647; display: none; align-items: center;
-        gap: 7px; padding: 9px; border: 1px solid #d7dce2; border-radius: 8px;
+        position: fixed; z-index: 2147483647; display: none; flex-direction: column;
+        gap: 8px; padding: 9px; border: 1px solid #d7dce2; border-radius: 8px;
         background: #fff; box-shadow: 0 5px 20px #17202a2b;
         color: #202a34; font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         pointer-events: auto; white-space: nowrap;
       }
       .toolbar.visible { display: flex; }
+      .toolbar-colors { display: flex; align-items: center; gap: 9px; }
       .swatch {
         width: 20px; height: 20px; padding: 0; border: 2px solid transparent;
         border-radius: 50%; cursor: pointer; box-sizing: border-box;
       }
       .swatch[aria-pressed="true"] { outline: 2px solid #334155; outline-offset: 2px; }
-      .mode, .cancel {
+      .cancel {
         height: 30px; padding: 0 9px; border: 1px solid #d7dce2; border-radius: 5px;
         background: #fff; color: inherit; cursor: pointer; font: inherit;
       }
-      .mode[aria-pressed="true"] { border-color: #334155; background: #edf1f5; }
       .note {
-        width: 170px; height: 28px; padding: 0 8px; border: 1px solid #d7dce2;
+        width: 100%; height: 30px; padding: 0 8px; border: 1px solid #d7dce2;
         border-radius: 5px; box-sizing: border-box; font: inherit;
       }
-      .divider { width: 1px; height: 22px; background: #e1e5e9; }
       .note-popover {
         position: fixed; z-index: 2147483647; display: none; width: min(320px, calc(100vw - 16px));
         padding: 12px; border: 1px solid #d7dce2; border-radius: 8px; box-sizing: border-box;
@@ -80,19 +88,17 @@
       .note-popover:not(.editing) .save-note,
       .note-popover:not(.editing) .cancel-edit { display: none; }
       @media (max-width: 560px) {
-        .toolbar { max-width: calc(100vw - 16px); flex-wrap: wrap; white-space: normal; }
-        .note { width: 130px; }
+        .toolbar { max-width: calc(100vw - 16px); white-space: normal; }
       }
     </style>
     <div class="toolbar" role="toolbar" aria-label="文本标记工具">
-      <button class="swatch" data-color="yellow" aria-label="黄色" title="黄色" style="background:#ffe36e"></button>
-      <button class="swatch" data-color="mint" aria-label="绿色" title="绿色" style="background:#9fe3c1"></button>
-      <button class="swatch" data-color="coral" aria-label="珊瑚色" title="珊瑚色" style="background:#ffb6a6"></button>
-      <span class="divider"></span>
-      <button class="mode" data-style="solid" aria-pressed="true">纯色</button>
-      <button class="mode" data-style="hatch" aria-pressed="false">斜线</button>
+      <div class="toolbar-colors" aria-label="选择标记颜色">
+        <button class="swatch" data-color="yellow" aria-label="黄色" title="黄色" style="background:#ffe36e"></button>
+        <button class="swatch" data-color="mint" aria-label="绿色" title="绿色" style="background:#9fe3c1"></button>
+        <button class="swatch" data-color="coral" aria-label="珊瑚色" title="珊瑚色" style="background:#ffb6a6"></button>
+        <button class="cancel" aria-label="关闭">取消</button>
+      </div>
       <input class="note" type="text" maxlength="300" placeholder="添加文字笔记（可选）" aria-label="文字笔记">
-      <button class="cancel" aria-label="关闭">取消</button>
     </div>
     <aside class="note-popover" role="group" aria-label="标记笔记">
       <div class="popover-colors" aria-label="修改标记颜色">
@@ -170,11 +176,8 @@
   }
 
   function applyAnnotationStyle(mark, annotation) {
-    mark.dataset.markerStyle = annotation.style;
     mark.style.backgroundColor = colors[annotation.color] || colors.yellow;
-    mark.style.backgroundImage = annotation.style === "hatch"
-      ? "repeating-linear-gradient(135deg, transparent 0 4px, #26374655 4px 6px)"
-      : "none";
+    mark.style.backgroundImage = "none";
   }
 
   async function updateAnnotationColor(color) {
@@ -187,7 +190,7 @@
     notePopover.querySelectorAll(".note-color").forEach((button) => {
       button.setAttribute("aria-pressed", String(button.dataset.color === color));
     });
-    await chrome.storage.local.set({ [storageKey]: annotations });
+    await withStorage(() => chrome.storage.local.set({ [storageKey]: annotations }));
   }
 
   function unwrapAnnotation(id) {
@@ -205,7 +208,7 @@
     popoverTargetId = null;
   }
 
-  function showNotePopover(mark) {
+  function showNotePopover(mark, pointer) {
     const annotation = annotations.find((item) => item.id === mark.dataset.markerId);
     if (!annotation) return;
     clearTimeout(hidePopoverTimer);
@@ -216,12 +219,14 @@
     });
     if (!notePopover.classList.contains("editing")) popoverEditor.value = annotation.note || "";
     notePopover.classList.add("visible");
-    const rect = mark.getBoundingClientRect();
     const bounds = notePopover.getBoundingClientRect();
-    const left = Math.max(8, Math.min(rect.left, innerWidth - bounds.width - 8));
-    const top = rect.bottom + bounds.height + 8 < innerHeight
-      ? rect.bottom + 8
-      : Math.max(8, rect.top - bounds.height - 8);
+    const gap = 12;
+    let left = pointer.clientX + gap;
+    let top = pointer.clientY + gap;
+    if (left + bounds.width + 8 > innerWidth) left = pointer.clientX - bounds.width - gap;
+    if (top + bounds.height + 8 > innerHeight) top = pointer.clientY - bounds.height - gap;
+    left = Math.max(8, Math.min(left, innerWidth - bounds.width - 8));
+    top = Math.max(8, Math.min(top, innerHeight - bounds.height - 8));
     notePopover.style.left = `${left}px`;
     notePopover.style.top = `${top}px`;
   }
@@ -266,26 +271,31 @@
       ...anchor,
       id: crypto.randomUUID(),
       color,
-      style: activeStyle,
       note: noteInput.value.trim()
     };
     wrapRange(activeRange, annotation);
     annotations.push(annotation);
-    await chrome.storage.local.set({ [storageKey]: annotations });
+    await withStorage(() => chrome.storage.local.set({ [storageKey]: annotations }));
     getSelection()?.removeAllRanges();
     noteInput.value = "";
     hideToolbar();
   }
 
-  function showToolbar(range) {
+  function showToolbar(range, pointer) {
     activeRange = range.cloneRange();
     const rect = range.getBoundingClientRect();
     toolbar.classList.add("visible");
     const bounds = toolbar.getBoundingClientRect();
-    const left = Math.max(8, Math.min(rect.left, innerWidth - bounds.width - 8));
-    const top = rect.top > bounds.height + 12 ? rect.top - bounds.height - 8 : Math.min(innerHeight - bounds.height - 8, rect.bottom + 8);
+    const anchorX = pointer?.clientX ?? rect.right;
+    const anchorY = pointer?.clientY ?? rect.bottom;
+    let left = anchorX + 12;
+    let top = anchorY + 12;
+    if (left + bounds.width + 8 > innerWidth) left = anchorX - bounds.width - 12;
+    if (top + bounds.height + 8 > innerHeight) top = anchorY - bounds.height - 12;
+    left = Math.max(8, Math.min(left, innerWidth - bounds.width - 8));
+    top = Math.max(8, Math.min(top, innerHeight - bounds.height - 8));
     toolbar.style.left = `${left}px`;
-    toolbar.style.top = `${Math.max(8, top)}px`;
+    toolbar.style.top = `${top}px`;
   }
 
   document.addEventListener("mouseup", (event) => {
@@ -297,10 +307,11 @@
     }
     const range = selection.getRangeAt(0);
     if (host.contains(range.commonAncestorContainer)) return;
-    showToolbar(range);
+    showToolbar(range, event);
   });
 
-  document.addEventListener("keyup", () => {
+  document.addEventListener("keyup", (event) => {
+    if (event.composedPath().includes(host)) return;
     const selection = getSelection();
     if (selection && !selection.isCollapsed && selection.toString().trim()) showToolbar(selection.getRangeAt(0));
   });
@@ -311,16 +322,10 @@
       await saveAnnotation(activeColor);
     });
   });
-  toolbar.querySelectorAll(".mode").forEach((button) => {
-    button.addEventListener("click", () => {
-      activeStyle = button.dataset.style;
-      toolbar.querySelectorAll(".mode").forEach((item) => item.setAttribute("aria-pressed", String(item === button)));
-    });
-  });
   shadow.querySelector(".cancel").addEventListener("click", hideToolbar);
   document.addEventListener("mouseover", (event) => {
     const mark = event.target.closest?.(".page-marker-highlight");
-    if (mark && (!notePopover.classList.contains("editing") || mark.dataset.markerId === popoverTargetId)) showNotePopover(mark);
+    if (mark && (!notePopover.classList.contains("editing") || mark.dataset.markerId === popoverTargetId)) showNotePopover(mark, event);
   });
   document.addEventListener("mouseout", (event) => {
     const mark = event.target.closest?.(".page-marker-highlight");
@@ -353,7 +358,7 @@
     annotations = annotations.map((item) => item.id === id ? { ...item, note } : item);
     shadow.querySelector(".popover-note").textContent = note || "没有附加笔记。";
     notePopover.classList.remove("editing");
-    await chrome.storage.local.set({ [storageKey]: annotations });
+    await withStorage(() => chrome.storage.local.set({ [storageKey]: annotations }));
   });
   shadow.querySelector(".delete-mark").addEventListener("click", async () => {
     if (!popoverTargetId) return;
@@ -363,9 +368,9 @@
     notePopover.classList.remove("editing");
     hideNotePopover();
     if (annotations.length) {
-      await chrome.storage.local.set({ [storageKey]: annotations });
+      await withStorage(() => chrome.storage.local.set({ [storageKey]: annotations }));
     } else {
-      await chrome.storage.local.remove(storageKey);
+      await withStorage(() => chrome.storage.local.remove(storageKey));
     }
   });
 
@@ -391,7 +396,8 @@
     }
   });
 
-  chrome.storage.local.get({ [storageKey]: [] }).then((result) => {
+  withStorage(() => chrome.storage.local.get({ [storageKey]: [] })).then((result) => {
+    if (!result) return;
     annotations = result[storageKey];
     for (const annotation of annotations) {
       const range = findRange(annotation);

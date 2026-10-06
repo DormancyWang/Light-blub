@@ -59,7 +59,6 @@
     .item { position: relative; padding: 8px 28px 8px 10px; }
     .item::before { position: absolute; top: 9px; bottom: 9px; left: 0; width: 3px; border-radius: 3px; background: var(--marker-color); content: ""; }
     .item::after { position: absolute; top: 16px; left: -12px; width: 9px; border-top: 1px solid #cbd6d0; content: ""; }
-    .item[data-style="hatch"]::before { background: repeating-linear-gradient(135deg, var(--marker-color) 0 3px, #53615a 3px 4px); }
     .excerpt { margin: 0; font-size: 12px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
     .note { margin: 4px 0 0; color: #56635d; font-size: 12px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
     .note-editor {
@@ -78,7 +77,6 @@
     .item.editing .note-editor { display: block; }
     .item.editing .note-actions { display: flex; }
     .item.editing .edit-note { display: none; }
-    .style-label { display: inline-block; margin-top: 5px; color: #748078; font-size: 10px; }
     .delete {
       position: absolute; top: 7px; right: 0; width: 26px; height: 26px;
       border: 0; border-radius: 5px; background: transparent; color: #8a514a; cursor: pointer;
