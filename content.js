@@ -149,7 +149,7 @@
 
   function textNodesInRange(range) {
     const root = range.commonAncestorContainer;
-    if (root.nodeType === Node.TEXT_NODE) return [root];
+    if (root.nodeType === Node.TEXT_NODE) return isIgnoredTextNode(root) ? [] : [root];
 
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const start = range.startContainer;
@@ -159,7 +159,7 @@
     while (node) {
       if (range.comparePoint(node, 0) === 1) break;
       try {
-        if (range.intersectsNode(node)) nodes.push(node);
+        if (!isIgnoredTextNode(node) && range.intersectsNode(node)) nodes.push(node);
       } catch {
       }
       node = walker.nextNode();
