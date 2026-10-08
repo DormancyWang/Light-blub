@@ -26,6 +26,15 @@
 
   const host = document.createElement("div");
   host.id = hostId;
+  const noteIndicatorStyle = document.createElement("style");
+  noteIndicatorStyle.textContent = `
+    .page-marker-highlight[data-has-note="true"] { position: relative; }
+    .page-marker-highlight[data-has-note="true"]::after {
+      position: absolute; top: -0.65em; right: -0.55em; z-index: 1;
+      content: "\\1F4A1"; font: 11px/1 sans-serif; pointer-events: none;
+    }
+  `;
+  document.documentElement.append(noteIndicatorStyle);
   const shadow = host.attachShadow({ mode: "open" });
   shadow.innerHTML = `
     <style>
@@ -138,28 +147,58 @@
     return nodes;
   }
 
+  function textNodesInRange(range) {
+    const root = range.commonAncestorContainer;
+    if (root.nodeType === Node.TEXT_NODE) return [root];
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const start = range.startContainer;
+    walker.currentNode = start;
+    let node = start.nodeType === Node.TEXT_NODE ? start : walker.nextNode();
+    const nodes = [];
+    while (node) {
+      if (range.comparePoint(node, 0) === 1) break;
+      try {
+        if (range.intersectsNode(node)) nodes.push(node);
+      } catch {
+      }
+      node = walker.nextNode();
+    }
+    return nodes;
+  }
+
+  function textContext(node, offset, direction) {
+    if (node.nodeType !== Node.TEXT_NODE) return "";
+    const isPrefix = direction === "backward";
+    let context = isPrefix ? node.nodeValue.slice(0, offset) : node.nodeValue.slice(offset);
+    const root = document.body || document.documentElement;
+    if (context.length < 40 && root.contains(node)) {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      walker.currentNode = node;
+      let adjacent;
+      while (context.length < 40 && (adjacent = isPrefix ? walker.previousNode() : walker.nextNode())) {
+        if (isIgnoredTextNode(adjacent)) continue;
+        const remaining = 40 - context.length;
+        const value = adjacent.nodeValue;
+        context = isPrefix
+          ? value.slice(-remaining) + context
+          : context + value.slice(0, remaining);
+      }
+    }
+    return isPrefix ? context.slice(-40) : context.slice(0, 40);
+  }
+
   function quoteForRange(range) {
     const text = range.toString();
-    const nodes = textNodes();
-    let joined = "";
-    let index = -1;
-    for (const node of nodes) {
-      if (node === range.startContainer) index = joined.length + range.startOffset;
-      joined += node.nodeValue;
-    }
-    if (index < 0 || joined.slice(index, index + text.length) !== text) index = joined.indexOf(text);
-    if (index < 0) return { text, prefix: "", suffix: "" };
     return {
       text,
-      prefix: joined.slice(Math.max(0, index - 40), index),
-      suffix: joined.slice(index + text.length, index + text.length + 40)
+      prefix: textContext(range.startContainer, range.startOffset, "backward"),
+      suffix: textContext(range.endContainer, range.endOffset, "forward")
     };
   }
 
   function wrapRange(range, annotation) {
-    const nodes = textNodes().filter((node) => {
-      try { return range.intersectsNode(node); } catch { return false; }
-    });
+    const nodes = textNodesInRange(range);
     for (const node of nodes) {
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.length;
@@ -172,6 +211,17 @@
       applyAnnotationStyle(mark, annotation);
       selected.parentNode.insertBefore(mark, selected);
       mark.append(selected);
+    }
+    updateNoteIndicator(annotation);
+  }
+
+  function updateNoteIndicator(annotation) {
+    if (!annotation) return;
+    const marks = [...document.querySelectorAll(".page-marker-highlight")]
+      .filter((mark) => mark.dataset.markerId === annotation.id);
+    marks.forEach((mark) => mark.removeAttribute("data-has-note"));
+    if (annotation.note?.trim() && marks.length) {
+      marks[marks.length - 1].dataset.hasNote = "true";
     }
   }
 
@@ -231,7 +281,7 @@
     notePopover.style.top = `${top}px`;
   }
 
-  function findRange(annotation) {
+  function buildTextIndex() {
     const nodes = textNodes();
     let joined = "";
     const offsets = [];
@@ -239,6 +289,11 @@
       offsets.push({ node, start: joined.length, end: joined.length + node.length });
       joined += node.nodeValue;
     }
+    return { joined, offsets };
+  }
+
+  function findRange(annotation, textIndex) {
+    const { joined, offsets } = textIndex;
     let from = 0;
     while (from < joined.length) {
       const index = joined.indexOf(annotation.text, from);
@@ -356,6 +411,7 @@
     const id = popoverTargetId;
     const note = popoverEditor.value.trim();
     annotations = annotations.map((item) => item.id === id ? { ...item, note } : item);
+    updateNoteIndicator(annotations.find((item) => item.id === id));
     shadow.querySelector(".popover-note").textContent = note || "没有附加笔记。";
     notePopover.classList.remove("editing");
     await withStorage(() => chrome.storage.local.set({ [storageKey]: annotations }));
@@ -386,6 +442,7 @@
       hideNotePopover();
     }
     annotations = nextAnnotations;
+    annotations.forEach(updateNoteIndicator);
     const activeAnnotation = annotations.find((item) => item.id === popoverTargetId);
     if (activeAnnotation) {
       shadow.querySelector(".popover-note").textContent = activeAnnotation.note || "没有附加笔记。";
@@ -399,8 +456,9 @@
   withStorage(() => chrome.storage.local.get({ [storageKey]: [] })).then((result) => {
     if (!result) return;
     annotations = result[storageKey];
-    for (const annotation of annotations) {
-      const range = findRange(annotation);
+    const textIndex = buildTextIndex();
+    const ranges = annotations.map((annotation) => [annotation, findRange(annotation, textIndex)]);
+    for (const [annotation, range] of ranges) {
       if (range) wrapRange(range, annotation);
     }
   });
