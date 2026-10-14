@@ -4,7 +4,11 @@ const path = require("node:path");
 const test = require("node:test");
 const { JSDOM } = require("jsdom");
 
-const contentScript = fs.readFileSync(path.join(__dirname, "content.js"), "utf8");
+const annotationStoreScript = fs.readFileSync(path.join(__dirname, "annotation-store.js"), "utf8");
+const textMatcherScript = fs.readFileSync(path.join(__dirname, "text-matcher.js"), "utf8");
+const annotationRendererScript = fs.readFileSync(path.join(__dirname, "annotation-renderer.js"), "utf8");
+const contentUIScript = fs.readFileSync(path.join(__dirname, "content-ui.js"), "utf8");
+const contentScript = fs.readFileSync(path.join(__dirname, "content-new.js"), "utf8");
 
 function createPage(body, initialStored = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${body}</body></html>`, {
@@ -31,6 +35,10 @@ function createPage(body, initialStored = {}) {
   };
   Object.defineProperty(dom.window.crypto, "randomUUID", { value: () => "test-marker" });
   dom.window.Range.prototype.getBoundingClientRect = () => ({ right: 10, bottom: 10 });
+  dom.window.eval(annotationStoreScript);
+  dom.window.eval(textMatcherScript);
+  dom.window.eval(annotationRendererScript);
+  dom.window.eval(contentUIScript);
   dom.window.eval(contentScript);
   return { dom, stored };
 }
